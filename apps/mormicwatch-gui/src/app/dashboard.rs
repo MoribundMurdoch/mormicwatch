@@ -1,15 +1,14 @@
 use std::sync::{Arc, Mutex};
 
-use eframe::egui::{
-    self,
-    Color32,
-    RichText,
+use eframe::egui::{self, RichText};
+
+use crate::app::{
+    history_graph::draw_history_graph,
+    target_zone::draw_target_zone,
+    theme,
 };
 
-use mormicwatch_core::models::{
-    app_state::AppState,
-    mic_status::MicStatus,
-};
+use mormicwatch_core::models::app_state::AppState;
 
 pub struct Dashboard {
     pub state: Arc<Mutex<AppState>>,
@@ -20,31 +19,6 @@ impl Dashboard {
         state: Arc<Mutex<AppState>>,
     ) -> Self {
         Self { state }
-    }
-
-    fn status_color(
-        status: MicStatus,
-    ) -> Color32 {
-        match status {
-            MicStatus::Healthy =>
-                Color32::GREEN,
-
-            MicStatus::Quiet =>
-                Color32::YELLOW,
-
-            MicStatus::Clipping =>
-                Color32::from_rgb(
-                    255,
-                    140,
-                    0,
-                ),
-
-            MicStatus::NoSignal =>
-                Color32::RED,
-
-            MicStatus::Disconnected =>
-                Color32::DARK_RED,
-        }
     }
 }
 
@@ -57,99 +31,112 @@ impl eframe::App for Dashboard {
         let state =
             self.state.lock().unwrap().clone();
 
-        let status_color =
-            Self::status_color(
-                state.status,
-            );
-
         egui::CentralPanel::default()
             .show(ctx, |ui| {
-
-                ui.vertical_centered(
-                    |ui| {
-
-                    ui.heading(
-                        "MorMicWatch",
-                    );
-
+                ui.vertical_centered(|ui| {
                     ui.add_space(10.0);
 
                     ui.label(
                         RichText::new(
-                            state.status
-                                .label(),
+                            "MORMICWATCH",
                         )
-                        .size(42.0)
-                        .color(
-                            status_color,
-                        ),
+                        .size(36.0)
+                        .color(theme::TEXT),
                     );
+
+                    ui.add_space(12.0);
+
+                    let ready_text =
+                        if state.readiness.ready {
+                            "READY TO RECORD"
+                        } else {
+                            "NOT READY"
+                        };
+
+                    let ready_color =
+                        if state.readiness.ready {
+                            theme::GOOD
+                        } else {
+                            theme::DANGER
+                        };
 
                     ui.label(
                         RichText::new(
-                            if state
-                                .metrics
-                                .speaking_now
-                            {
-                                "SPEAKING"
-                            } else {
-                                "SILENT"
-                            },
+                            ready_text,
                         )
-                        .size(28.0),
+                        .size(54.0)
+                        .color(ready_color),
                     );
-
-                    ui.add_space(10.0);
 
                     ui.label(
                         RichText::new(
                             format!(
-                                "{}%",
+                                "QUALITY: {}",
                                 state
-                                    .health
+                                    .recording_quality
+                                    .label()
+                            ),
+                        )
+                        .size(28.0)
+                        .color(ready_color),
+                    );
+
+                    ui.label(
+                        RichText::new(
+                            format!(
+                                "CONFIDENCE: {}%",
+                                state
+                                    .readiness
                                     .score
                             ),
                         )
-                        .size(24.0),
+                        .size(24.0)
+                        .color(theme::TEXT),
                     );
+
+                    ui.add_space(12.0);
+
+                    draw_target_zone(
+                        ui,
+                        state.metrics.peak_db,
+                    );
+
+                    if !state.readiness.ready
+                        && !state
+                            .health
+                            .reasons
+                            .is_empty()
+                    {
+                        ui.separator();
+
+                        ui.heading(
+                            "HOW TO FIX IT",
+                        );
+
+                        for reason in
+                            &state.health.reasons
+                        {
+                            ui.colored_label(
+                                theme::WARNING,
+                                format!(
+                                    "• {}",
+                                    reason
+                                ),
+                            );
+                        }
+                    }
 
                     ui.separator();
 
-                    ui.label(
-                        format!(
-                            "Device: {}",
-                            state
-                                .device_name
-                        ),
-                    );
-
-                    ui.add_space(10.0);
-
-                    ui.label(
-                        format!(
-                            "Current: {:.1} dB",
-                            state
-                                .metrics
-                                .current_db
-                        ),
+                    ui.heading(
+                        "DEVICE",
                     );
 
                     ui.label(
-                        format!(
-                            "Peak: {:.1} dB",
-                            state
-                                .metrics
-                                .peak_db
-                        ),
-                    );
-
-                    ui.label(
-                        format!(
-                            "Peak Hold: {:.1} dB",
-                            state
-                                .metrics
-                                .peak_hold_db
-                        ),
+                        RichText::new(
+                            &state.device_name,
+                        )
+                        .color(theme::TEXT),
                     );
 
                     if let Some(
@@ -166,30 +153,87 @@ impl eframe::App for Dashboard {
                                     .as_secs()
                             ),
                         );
-                    }
-
-                    if !state
-                        .health
-                        .reasons
-                        .is_empty()
-                    {
-                        ui.add_space(
-                            10.0,
+                    } else {
+                        ui.label(
+                            "Last Signal: Never",
                         );
-
-                        ui.separator();
-
-                        for reason in
-                            &state
-                                .health
-                                .reasons
-                        {
-                            ui.colored_label(
-                                Color32::RED,
-                                reason,
-                            );
-                        }
                     }
+
+                    ui.separator();
+
+                    ui.heading(
+                        "DIAGNOSTICS",
+                    );
+
+                    ui.label(
+                        format!(
+                            "Current Level: {:.1} dB",
+                            state
+                                .metrics
+                                .current_db
+                        ),
+                    );
+
+                    ui.label(
+                        format!(
+                            "Peak Level: {:.1} dB",
+                            state
+                                .metrics
+                                .peak_db
+                        ),
+                    );
+
+                    ui.label(
+                        format!(
+                            "Peak Hold: {:.1} dB",
+                            state
+                                .metrics
+                                .peak_hold_db
+                        ),
+                    );
+
+                    ui.label(
+                        format!(
+                            "Signal Present: {}",
+                            if state
+                                .health
+                                .signal_present
+                            {
+                                "YES"
+                            } else {
+                                "NO"
+                            }
+                        ),
+                    );
+
+                    ui.label(
+                        format!(
+                            "Speaking: {}",
+                            if state
+                                .metrics
+                                .speaking_now
+                            {
+                                "YES"
+                            } else {
+                                "NO"
+                            }
+                        ),
+                    );
+
+                    ui.separator();
+
+                    ui.heading(
+                        "HISTORY",
+                    );
+
+                    draw_history_graph(
+                        ui,
+                        state
+                            .metrics
+                            .history
+                            .iter()
+                            .copied(),
+                    );
                 });
             });
 

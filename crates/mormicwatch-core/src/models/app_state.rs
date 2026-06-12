@@ -2,6 +2,8 @@ use super::{
     audio_metrics::AudioMetrics,
     health_score::HealthScore,
     mic_status::MicStatus,
+    readiness_report::ReadinessReport,
+    recording_quality::RecordingQuality,
 };
 
 #[derive(Debug, Clone)]
@@ -13,6 +15,10 @@ pub struct AppState {
     pub health: HealthScore,
 
     pub status: MicStatus,
+
+    pub recording_quality: RecordingQuality,
+
+    pub readiness: ReadinessReport,
 }
 
 impl Default for AppState {
@@ -25,6 +31,12 @@ impl Default for AppState {
             health: HealthScore::default(),
 
             status: MicStatus::NoSignal,
+
+            recording_quality:
+                RecordingQuality::NoSignal,
+
+            readiness:
+                ReadinessReport::default(),
         }
     }
 }

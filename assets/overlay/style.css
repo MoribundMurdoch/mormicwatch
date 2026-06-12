@@ -1,0 +1,18 @@
+body {
+    background: transparent;
+    color: #a9aae2;
+    font-family: sans-serif;
+    text-align: center;
+}
+
+#status {
+    font-size: 48px;
+}
+
+#quality {
+    font-size: 28px;
+}
+
+#zone {
+    font-size: 20px;
+}

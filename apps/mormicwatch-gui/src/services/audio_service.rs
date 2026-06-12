@@ -8,14 +8,19 @@ use crossbeam_channel::unbounded;
 
 use mormicwatch_core::{
     audio::{
-        capture::{start_capture, AudioFrame},
+        capture::{
+            start_capture,
+            AudioFrame,
+        },
         devices::default_input_name,
         health::{
             calculate_health,
             classify,
+            classify_recording_quality,
             SPEAKING_THRESHOLD_DB,
         },
         history::push_history,
+        readiness::build_readiness_report,
     },
     models::app_state::AppState,
 };
@@ -26,18 +31,23 @@ pub fn start_audio_service(
     let (tx, rx) = unbounded::<AudioFrame>();
 
     {
-        let mut state = state.lock().unwrap();
+        let mut state =
+            state.lock().unwrap();
 
         if let Some(device_name) =
             default_input_name()
         {
-            state.device_name = device_name;
+            state.device_name =
+                device_name;
         }
     }
 
     thread::spawn(move || {
-        let _stream = start_capture(tx)
-            .expect("failed to start audio capture");
+        let _stream =
+            start_capture(tx)
+                .expect(
+                    "failed to start audio capture",
+                );
 
         loop {
             if let Ok(frame) = rx.recv() {
@@ -53,16 +63,20 @@ pub fn start_audio_service(
                 state.metrics.peak_db =
                     frame.peak_db;
 
-                state.metrics.samples_processed += 1;
+                state.metrics.samples_processed +=
+                    1;
 
                 state.metrics.peak_hold_db =
-                    if frame.peak_db >
-                        state.metrics.peak_hold_db
+                    if frame.peak_db
+                        > state
+                            .metrics
+                            .peak_hold_db
                     {
                         frame.peak_db
                     } else {
                         (
-                            state.metrics
+                            state
+                                .metrics
                                 .peak_hold_db
                                 - 0.05
                         )
@@ -70,7 +84,9 @@ pub fn start_audio_service(
                     };
 
                 push_history(
-                    &mut state.metrics.history,
+                    &mut state
+                        .metrics
+                        .history,
                     frame.rms_db,
                 );
 
@@ -78,22 +94,42 @@ pub fn start_audio_service(
                     frame.peak_db
                         >= SPEAKING_THRESHOLD_DB;
 
-                if state.metrics.speaking_now {
-                    state.metrics.last_signal_at =
-                        Some(Instant::now());
+                if state
+                    .metrics
+                    .speaking_now
+                {
+                    state.metrics
+                        .last_signal_at =
+                        Some(
+                            Instant::now(),
+                        );
                 }
 
-                state.status = classify(
-                    frame.peak_db,
-                    state.metrics.last_signal_at,
-                );
+                state.status =
+                    classify(
+                        frame.peak_db,
+                        state.metrics
+                            .last_signal_at,
+                    );
 
                 state.health =
                     calculate_health(
                         frame.peak_db,
                         frame.rms_db,
-                        state.metrics.last_signal_at,
+                        state.metrics
+                            .last_signal_at,
                         true,
+                    );
+
+                state.recording_quality =
+                    classify_recording_quality(
+                        frame.peak_db,
+                    );
+
+                state.readiness =
+                    build_readiness_report(
+                        state
+                            .recording_quality,
                     );
             }
         }
